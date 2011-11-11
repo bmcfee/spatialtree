@@ -1,0 +1,15 @@
+data/*
+*.mexa64
+*.mexglx
+*.o
+*.wav
+*.mp3
+*.mfcc*
+*.dvi
+*.aux
+*.bbl
+*.blg
+*.log
+*~
+*.sav
+*.old

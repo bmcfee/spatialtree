@@ -83,18 +83,23 @@ class spatialtree(object):
 
         if kwargs['rule'] == 'rp' and 'samples_rp' not in kwargs:
             kwargs['samples_rp']    = 10
+            pass
+        if 'maxindex' not in kwargs:
+            kwargs['maxindex']      = len(data)
+            pass
 
         # All information is now contained in kwargs, we may proceed
         
-
         # Store bookkeeping information
         self.__indices      = set(kwargs['indices'])
         self.__splitRule    = kwargs['rule']
         self.__spill        = kwargs['spill']
-        self.__children     = (None, None)
+        self.__children     = None
         self.__w            = None
-        self.__thresholds   = (None, None)
+        self.__thresholds   = None
         self.__n            = len(self.__indices)
+        self.__maxindex     = kwargs['maxindex']
+
         for x in self.__indices:
             self.__d = len(data[x])
             break
@@ -151,6 +156,7 @@ class spatialtree(object):
         del wx
 
         # Construct the children
+        self.__children     [ None ] * 2
         kwargs['height']    -= 1
 
         kwargs['indices']   = left_set
@@ -163,6 +169,59 @@ class spatialtree(object):
 
         # Done
         pass
+
+    # RETRIEVAL CODE
+
+    def retrievalSet(self, **kwargs):
+        '''
+        S = T.retrievalSet(index=X, data=X)
+        
+        Compute the retrieval set for either a given query index or vector.
+
+        At most one of index or data must be supplied
+        '''
+
+        if 'index' in kwargs:
+            return self.__retrieveIndex(kwargs['index'])
+        elif 'data' in kwargs:
+            return self.__retrieveVector(kwargs['data'])
+
+        raise Exception('spatialtree.retrievalSet must be supplied with either an index or a data vector')
+        pass
+
+
+    def __retrieveIndex(self, index):
+
+        S = set()
+        
+        if index in S:
+            if self.__children is None:
+                S = self.__indices.difference([index])
+            else:
+                S = self.children[0].__retrieveIndex(index) | self.children[1].__retrieveIndex(index)
+            pass
+
+        return S
+
+    def __retrieveVector(self, vector):
+
+        S = set()
+
+        if self.__children is None:
+            S = self.__indices
+        else:
+            Wx = numpy.dot(self.__w, vector)
+
+            # Should we go right?
+            if Wx >= self.__thresholds[0]:
+                S |= self.__children[1].__retrieveVector(vector)
+
+            # Should we go left?
+            if Wx < self.__thresholds[-1]:
+                S |= self.__children[0].__retrieveVector(vector)
+
+        return S
+
 
     # SPLITTING RULES
 

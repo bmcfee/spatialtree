@@ -195,7 +195,7 @@ class spatialtree(object):
         return self.__height
 
     def getRule(self):
-        return self.__rule
+        return self.__splitRule
 
     def getSpill(self):
         return self.__spill
@@ -223,7 +223,7 @@ class spatialtree(object):
         
         Compute the retrieval set for either a given query index or vector.
 
-        At most one of index or data must be supplied
+        Exactly one of index or data must be supplied
         '''
 
         if 'index' in kwargs:

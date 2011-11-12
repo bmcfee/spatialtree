@@ -14,6 +14,7 @@ Also with spill support
 import numpy
 import scipy.stats
 import random
+import heapq
 
 class spatialtree(object):
 
@@ -29,7 +30,7 @@ class spatialtree(object):
                             
 
         Required arguments:
-            data:           n-by-d data matrix (numpy.ndarray), one point per row
+            data:           d-by-n data matrix (numpy.ndarray), one point per column
                             alternatively, may be a dict of vectors
 
         Optional arguments:
@@ -74,8 +75,8 @@ class spatialtree(object):
             kwargs['spill']         = 0.0
             pass
 
-        if spill < 0.0 or spill >= 1.0:
-            raise ValueError('spill=%.2e, must lie in range [0,1)' % spill)
+        if kwargs['spill'] < 0.0 or kwargs['spill'] >= 1.0:
+            raise ValueError('spill=%.2e, must lie in range [0,1)' % kwargs['spill'])
 
         if kwargs['rule'] == '2-means' and 'steps_2means' not in kwargs:
             kwargs['steps_2means']  = 1000
@@ -100,10 +101,10 @@ class spatialtree(object):
         self.__n            = len(self.__indices)
         self.__maxindex     = kwargs['maxindex']
 
+
         for x in self.__indices:
             self.__d = len(data[x])
             break
-        del x
 
         # Split the node
         self.split(data, **kwargs)
@@ -131,17 +132,20 @@ class spatialtree(object):
         if kwargs['height'] < 1:
             raise ValueError('spatialtree.split() called with height<0')
 
+        if len(kwargs['indices']) < 2:
+            return
+
         # Compute the split direction 
         self.__w = splitF(data, **kwargs)
 
         # Project onto direction
         wx = {}
         for i in self.__indices:
-            wx[i] = numpy.dot(self.__w, X[i])
+            wx[i] = numpy.dot(self.__w, data[i])
             pass
 
         # Compute the bias points
-        self.__thresholds = scipy.stats.mstats.mquantiles(wx.values, [0.5 - self.__spill/2, 0.5 + self.__spill/2])
+        self.__thresholds = scipy.stats.mstats.mquantiles(wx.values(), [0.5 - self.__spill/2, 0.5 + self.__spill/2])
 
         # Partition the data
         left_set    = set()
@@ -156,7 +160,7 @@ class spatialtree(object):
         del wx
 
         # Construct the children
-        self.__children     [ None ] * 2
+        self.__children     = [ None ] * 2
         kwargs['height']    -= 1
 
         kwargs['indices']   = left_set
@@ -174,7 +178,7 @@ class spatialtree(object):
 
     def retrievalSet(self, **kwargs):
         '''
-        S = T.retrievalSet(index=X, data=X)
+        S = T.retrievalSet(index=X, vector=X)
         
         Compute the retrieval set for either a given query index or vector.
 
@@ -183,8 +187,8 @@ class spatialtree(object):
 
         if 'index' in kwargs:
             return self.__retrieveIndex(kwargs['index'])
-        elif 'data' in kwargs:
-            return self.__retrieveVector(kwargs['data'])
+        elif 'vector' in kwargs:
+            return self.__retrieveVector(kwargs['vector'])
 
         raise Exception('spatialtree.retrievalSet must be supplied with either an index or a data vector')
         pass
@@ -194,11 +198,11 @@ class spatialtree(object):
 
         S = set()
         
-        if index in S:
+        if index in self.__indices:
             if self.__children is None:
                 S = self.__indices.difference([index])
             else:
-                S = self.children[0].__retrieveIndex(index) | self.children[1].__retrieveIndex(index)
+                S = self.__children[0].__retrieveIndex(index) | self.__children[1].__retrieveIndex(index)
             pass
 
         return S
@@ -207,6 +211,7 @@ class spatialtree(object):
 
         S = set()
 
+        # Did we land at a leaf?  Must be done
         if self.__children is None:
             S = self.__indices
         else:
@@ -221,6 +226,47 @@ class spatialtree(object):
                 S |= self.__children[0].__retrieveVector(vector)
 
         return S
+
+
+    def k_nearest(self, data, **kwargs):
+        '''
+        neighbors = T.k_nearest(data, k=10, index=X, vector=X)
+
+        data:       the data matrix/dictionary
+        k:          the number of (approximate) nearest neighbors to return
+
+        index=X:    the index of the query point OR
+        vector=X:   a data vector to query against
+
+        Returns:
+        A sorted list of the indices of k-nearest neighbors of the query
+        '''
+
+
+        if 'k' not in kwargs:
+            raise Exception('k_nearest called with no value of k')
+
+        if not isinstance(kwargs['k'], int):
+            raise TypeError('k_nearest must be called with an integer value of k')
+        if kwargs['k'] < 1:
+            raise ValueError('k must be a positive integer')
+
+        # Get the retrieval set
+        if 'index' in kwargs:
+            x = data[kwargs['index']]
+        else:
+            x = kwargs['vector']
+            pass
+
+        # Now compute distance from query point to the retrieval set
+        def dg(S):
+            for i in S:
+                yield (numpy.sum((x-data[i])**2), i)
+            pass
+
+        S = heapq.nsmallest(kwargs['k'], dg(self.retrievalSet(**kwargs)))
+
+        return [i for (d,i) in S]
 
 
     # SPLITTING RULES
@@ -307,9 +353,9 @@ class spatialtree(object):
 
 
     def __RP(self, data, **kwargs):
-        k = kwargs['samples_rp']
+        k   = kwargs['samples_rp']
         # sample directions from the unit sphere
-        W   = numpy.random.randn( (k, self.__d]) )
+        W   = numpy.random.randn( k, self.__d )
 
         for i in xrange(k):
             W[i,:] /= numpy.sqrt(numpy.sum(W[i,:]**2))

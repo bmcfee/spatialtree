@@ -8,7 +8,9 @@ Implementation of spatial trees:
     * 2-means tree
     * RP tree
 
-Also with spill support
+Also supports spill trees.
+
+See: docs for spatialtree.spatialtree
 '''
 
 import numpy
@@ -63,7 +65,7 @@ class spatialtree(object):
             else:
                 kwargs['indices']   = range(len(data))
             pass
-
+        
         n = len(kwargs['indices'])
 
         # Use maximum-variance kd by default
@@ -99,9 +101,6 @@ class spatialtree(object):
         if kwargs['rule'] == 'rp' and 'samples_rp' not in kwargs:
             kwargs['samples_rp']    = 10
             pass
-        if 'maxindex' not in kwargs:
-            kwargs['maxindex']      = len(data)
-            pass
 
 
         # All information is now contained in kwargs, we may proceed
@@ -113,15 +112,17 @@ class spatialtree(object):
         self.__children     = None
         self.__w            = None
         self.__thresholds   = None
-        self.__n            = len(self.__indices)
-        self.__maxindex     = kwargs['maxindex']
+        self.__keyvalue     = isinstance(data, dict)
 
 
+
+        # Compute the dimensionality of the data
+        # This way supports opaque key-value stores as well as numpy arrays
         for x in self.__indices:
             self.__d = len(data[x])
             break
 
-        # Split the node
+        # Split the new node
         self.__height       = self.__split(data, **kwargs)
 
         pass
@@ -189,6 +190,39 @@ class spatialtree(object):
         # Done
         return 1 + max(self.__children[0].getHeight(), self.__children[1].getHeight())
 
+    def update(self, D):
+        '''
+        T.update({new_key1: new_vector1, [new_key2: new_vector2, ...]})
+
+        Add new data to the tree.  Note: this does not rebalance or split the tree.
+
+        Only valid when using key-value stores.
+        '''
+
+        if not self.__keyvalue:
+            raise TypeError('update method only supported when using key-value stores')
+
+        self.__indices.update(D.keys())
+
+        if self.__children is None:
+            return
+
+        left_set    = {}
+        right_set   = {}
+        for (key, vector) in D.iteritems():
+            wx = numpy.dot(self.__w, vector)
+
+            if wx >= self.__thresholds[0]:
+                right_set[key]  = vector
+            if wx < self.__thresholds[-1]:
+                left_set[key]   = vector
+            pass
+
+        self.__children[0].update(left_set)
+        del left_set
+        self.__children[1].update(right_set)
+
+        pass
 
     # Getters and container methods
     def getHeight(self):
@@ -261,10 +295,12 @@ class spatialtree(object):
             # Should we go right?
             if Wx >= self.__thresholds[0]:
                 S |= self.__children[1].__retrieveVector(vector)
+                pass
 
             # Should we go left?
             if Wx < self.__thresholds[-1]:
                 S |= self.__children[0].__retrieveVector(vector)
+                pass
 
         return S
 
@@ -280,7 +316,7 @@ class spatialtree(object):
         vector=X:   a data vector to query against
 
         Returns:
-        A sorted list of the indices of k-nearest neighbors of the query
+        A sorted list of the indices of k-nearest (approximate) neighbors of the query
         '''
 
 
@@ -326,10 +362,10 @@ class spatialtree(object):
             pass
 
         # the mean
-        moment_1    /= self.__n   
+        moment_1    /= len(self)
 
         # the covariance
-        sigma       = (moment_2 - (self.__n * numpy.outer(moment_1, moment_1))) / (self.__n - 1.0)
+        sigma       = (moment_2 - (len(self) * numpy.outer(moment_1, moment_1))) / (len(self)- 1.0)
 
         # eigendecomposition
         (l, v)      = numpy.linalg.eigh(sigma)
@@ -348,10 +384,10 @@ class spatialtree(object):
             pass
 
         # mean
-        moment_1    /= self.__n
+        moment_1    /= len(self)
 
         # variance
-        sigma       = (moment_2 - (self.__n * moment_1**2)) / (self.__n - 1.0)
+        sigma       = (moment_2 - (len(self) * moment_1**2)) / (len(self) - 1.0)
 
         # the coordinate of maximum variance
         w           = numpy.zeros(self.__d)
@@ -367,7 +403,7 @@ class spatialtree(object):
 
         index       = list(self.__indices)
         count       = 0
-        num_steps   = max(self.__n, kwargs['steps_2means'])
+        num_steps   = max(len(self), kwargs['steps_2means'])
 
         while True:
             # Randomly permute the index
@@ -395,11 +431,14 @@ class spatialtree(object):
 
     def __RP(self, data, **kwargs):
         k   = kwargs['samples_rp']
-        # sample directions from the unit sphere
+
+        # sample directions from d-dimensional normal
         W   = numpy.random.randn( k, self.__d )
 
+        # normalize each sample to get a sample from unit sphere
         for i in xrange(k):
             W[i,:] /= numpy.sqrt(numpy.sum(W[i,:]**2))
+            pass
 
         # Find the direction that maximally spreads the data:
 
@@ -413,3 +452,5 @@ class spatialtree(object):
             pass
 
         return W[numpy.argmax(max_val - min_val),:]
+
+# end

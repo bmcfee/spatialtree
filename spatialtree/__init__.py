@@ -33,7 +33,7 @@ class spatialtree(object):
                             
 
         Required arguments:
-            data:           d-by-n data matrix (numpy.ndarray), one point per column
+            data:           n-by-d data matrix (numpy.ndarray), one point per row
                             alternatively, may be a dict of vectors
 
         Optional arguments:
@@ -126,6 +126,11 @@ class spatialtree(object):
         pass
 
     def __split(self, data, **kwargs):
+        '''
+        Recursive algorithm to build a tree by splitting data.
+
+        Not to be called externally.
+        '''
 
         # First, find the split rule
         if kwargs['rule'] == 'pca':
@@ -218,27 +223,63 @@ class spatialtree(object):
 
     # Getters and container methods
     def getHeight(self):
+        '''
+        Returns the height of the tree.
+
+        A tree with no children (a leaf) has height=0.
+        Otherwise, height = 1 + max(height(left child), height(right child))
+        '''
         return self.__height
 
     def getRule(self):
+        '''
+        Returns the splitting rule used to generate this tree.  
+        
+        One of: 'kd', 'pca', '2-means', 'rp'
+        '''
         return self.__splitRule
 
     def getSpill(self):
+        '''
+        Returns the spill percentage used to generate this tree.
+
+        Floating point number in range: [0, 1)
+        '''
         return self.__spill
 
     def getSplit(self):
+        '''
+        Returns the split rule for this node: a tuple (w, (lower_threshold, upper_threshold))
+        where w is a vector, and the thresholds are scalars.
+
+        For a vector x, 
+            if numpy.dot(w, x) >= lower_threshold  then  x propagates to right subtree
+            if numpy.dot(w, x) <  upper_threshold  then  x propagates to left subtree
+        '''
         return (self.__w, self.__thresholds)
 
     def getDimension(self):
+        '''
+        Returns the dimensionality of data in this tree.
+        '''
         return self.__d
 
     def __len__(self):
+        '''
+        Returns the number of data points contained in this tree.
+        '''
         return len(self.__indices)
 
-    def __contains(self, x):
-        return x in self.__indices
+    def __contains(self, item):
+        '''
+        Returns true if the given item is contained in this tree, false otherwise.
+        '''
+        return item in self.__indices
 
     def __iter__(self):
+        '''
+        Iterator over items contained in this tree.
+        '''
         return self.__indices.__iter__()
 
     # RETRIEVAL CODE
@@ -249,7 +290,7 @@ class spatialtree(object):
         
         Compute the retrieval set for either a given query index or vector.
 
-        Exactly one of index or data must be supplied
+        Exactly one of index or data must be supplied.
         '''
 
         def __retrieveIndex(idx):
@@ -342,6 +383,13 @@ class spatialtree(object):
     # SPLITTING RULES
 
     def __PCA(self, data, **kwargs):
+        '''
+        PCA split:
+
+        Computes a split direction by the top principal component
+        (leading eigenvector of the covariance matrix) of data in 
+        the current node.
+        '''
         # first moment
         moment_1 = numpy.zeros(self.__d)
 
@@ -368,6 +416,12 @@ class spatialtree(object):
         return w
 
     def __KD(self, data, **kwargs):
+        '''
+        KD split:
+
+        Finds the coordinate axis with highest variance of data
+        in the current node
+        '''
         moment_1 = numpy.zeros(self.__d)
         moment_2 = numpy.zeros(self.__d)
 
@@ -388,6 +442,17 @@ class spatialtree(object):
         return w
 
     def __2means(self, data, **kwargs):
+        '''
+        2-means split
+
+        Computes a split direction by clustering the data in the current node
+        into two, and choosing the direction spanned by the cluster centroids:
+            w <- (mu_1 - mu_2)
+
+        The cluster centroids are found by an online k-means with the Hartigan
+        update.  The algorithm runs through the data in random order until
+        a specified minimum number of updates have occurred (default: 1000).
+        '''
         def D(u,v):
             return numpy.sum( (u-v)**2 )
 
@@ -423,6 +488,14 @@ class spatialtree(object):
 
 
     def __RP(self, data, **kwargs):
+        '''
+        RP split
+
+        Generates some number m of random directions w by sampling
+        from the d-dimensional unit sphere, and picks the w which
+        maximizes the diameter of projected data from the current node:
+        w <- argmax_(w_1, w_2, ..., w_m) max_(x1, x2 in node) |w' (x1 - x2)|
+        '''
         k   = kwargs['samples_rp']
 
         # sample directions from d-dimensional normal

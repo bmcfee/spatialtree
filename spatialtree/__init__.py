@@ -114,8 +114,6 @@ class spatialtree(object):
         self.__thresholds   = None
         self.__keyvalue     = isinstance(data, dict)
 
-
-
         # Compute the dimensionality of the data
         # This way supports opaque key-value stores as well as numpy arrays
         for x in self.__indices:
@@ -141,20 +139,17 @@ class spatialtree(object):
         else:
             raise ValueError('Unsupported split rule: %s' % kwargs['rule'])
 
-        # If the height is 0, we don't need to split
-        if kwargs['height'] == 0:
-            return  0
-
-        if kwargs['height'] < 1:
+        if kwargs['height'] < 0:
             raise ValueError('spatialtree.split() called with height<0')
 
-        if len(kwargs['indices']) < kwargs['min_items']:
+        # If the height is 0, or the set is too small, then we don't need to split
+        if kwargs['height'] == 0 or len(kwargs['indices']) < kwargs['min_items']:
             return  0
 
         # Compute the split direction 
         self.__w = splitF(data, **kwargs)
 
-        # Project onto direction
+        # Project onto split direction
         wx = {}
         for i in self.__indices:
             wx[i] = numpy.dot(self.__w, data[i])
@@ -173,7 +168,7 @@ class spatialtree(object):
             if val < self.__thresholds[-1]:
                 left_set.add(i)
             pass
-        del wx
+        del wx  # Don't need scores anymore
 
         # Construct the children
         self.__children     = [ None ] * 2
@@ -181,11 +176,9 @@ class spatialtree(object):
 
         kwargs['indices']   = left_set
         self.__children[0]  = spatialtree(data, **kwargs)
-        del left_set
 
         kwargs['indices']   = right_set
         self.__children[1]  = spatialtree(data, **kwargs)
-        del right_set
 
         # Done
         return 1 + max(self.__children[0].getHeight(), self.__children[1].getHeight())
@@ -219,7 +212,6 @@ class spatialtree(object):
             pass
 
         self.__children[0].update(left_set)
-        del left_set
         self.__children[1].update(right_set)
 
         pass
@@ -260,49 +252,49 @@ class spatialtree(object):
         Exactly one of index or data must be supplied
         '''
 
+        def __retrieveIndex(idx):
+
+            S = set()
+        
+            if idx in self.__indices:
+                if self.__children is None:
+                    S = self.__indices.difference([idx])
+                else:
+                    S = self.__children[0].retrievalSet(index=idx) | self.__children[1].retrievalSet(index=idx)
+                pass
+
+            return S
+
+        def __retrieveVector(vec):
+
+            S = set()
+    
+            # Did we land at a leaf?  Must be done
+            if self.__children is None:
+                S = self.__indices
+            else:
+                Wx = numpy.dot(self.__w, vec)
+
+                # Should we go right?
+                if Wx >= self.__thresholds[0]:
+                    S |= self.__children[1].retrievalSet(vector=vec)
+                    pass
+
+                # Should we go left?
+                if Wx < self.__thresholds[-1]:
+                    S |= self.__children[0].retrievalSet(vector=vec)
+                    pass
+
+            return S
+
         if 'index' in kwargs:
-            return self.__retrieveIndex(kwargs['index'])
+            return __retrieveIndex(kwargs['index'])
         elif 'vector' in kwargs:
-            return self.__retrieveVector(kwargs['vector'])
+            return __retrieveVector(kwargs['vector'])
 
         raise Exception('spatialtree.retrievalSet must be supplied with either an index or a data vector')
         pass
 
-
-    def __retrieveIndex(self, index):
-
-        S = set()
-        
-        if index in self.__indices:
-            if self.__children is None:
-                S = self.__indices.difference([index])
-            else:
-                S = self.__children[0].__retrieveIndex(index) | self.__children[1].__retrieveIndex(index)
-            pass
-
-        return S
-
-    def __retrieveVector(self, vector):
-
-        S = set()
-
-        # Did we land at a leaf?  Must be done
-        if self.__children is None:
-            S = self.__indices
-        else:
-            Wx = numpy.dot(self.__w, vector)
-
-            # Should we go right?
-            if Wx >= self.__thresholds[0]:
-                S |= self.__children[1].__retrieveVector(vector)
-                pass
-
-            # Should we go left?
-            if Wx < self.__thresholds[-1]:
-                S |= self.__children[0].__retrieveVector(vector)
-                pass
-
-        return S
 
 
     def k_nearest(self, data, **kwargs):
@@ -343,6 +335,7 @@ class spatialtree(object):
 
         S = heapq.nsmallest(kwargs['k'], dg(self.retrievalSet(**kwargs)))
 
+        # Pull out indices in sorted order
         return [i for (d,i) in S]
 
 

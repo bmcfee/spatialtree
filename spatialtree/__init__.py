@@ -379,6 +379,37 @@ class spatialtree(object):
         # Pull out indices in sorted order
         return [i for (d,i) in S]
 
+    # PRUNING
+
+    def prune(self, max_height):
+        '''
+        Prune the tree to height <= max_height.
+
+        max_height must be a non-negative integer.
+        '''
+        
+        if not isinstance(max_height, int):
+            raise TypeError('max_height must be a non-negative integer.')
+        if max_height < 0:
+            raise ValueError('max_height must be a non-negative integer.')
+
+        # If we're already a leaf, nothing to do
+        if self.__height == 0:
+            return
+
+        # If max_height is 0, prune here
+        if max_height == 0:
+            self.__height       = 0
+            self.__w            = None
+            self.__children     = None
+            self.__thresholds   = None
+            return
+
+        # Otherwise, recursively prune
+        self.__children[0].prune(max_height - 1)
+        self.__children[1].prune(max_height - 1)
+        self.__height           = 1 + max(self.__children[0].getHeight(), self.__children[1].getHeight())
+        pass
 
     # SPLITTING RULES
 

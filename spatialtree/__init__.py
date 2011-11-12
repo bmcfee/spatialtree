@@ -21,10 +21,11 @@ class spatialtree(object):
     def __init__(self, data, **kwargs):
         '''
         T = spatialtree(    data, 
-                            rule='pca', 
+                            rule='kd', 
+                            spill=0.25, 
                             height=H, 
-                            spill=0.0, 
                             indices=(index1, index2,...), 
+                            min_items=64,
                             steps_2means=1000,
                             samples_rp=10)
                             
@@ -36,14 +37,18 @@ class spatialtree(object):
         Optional arguments:
             rule:           must be one of 'kd', 'pca', '2-means', 'rp'
 
-            height>0:       maximum-height to build the tree
-                            default: ceiling(log2(n) - 7)
-
-            spill:          how much overlap to allow between children at split
+            spill:          what fraction of the data should propagate to both children during splits
                             must lie in range [0,1)
+
+                            Setting spill=0 yields a partition tree
+
+            height>0:       maximum-height to build the tree
+                            default is calculated to yield leaves with ~500 items each
 
             indices:        list of keys/indices to store in this (sub)tree
                             default: 0:n-1, or data.keys()
+
+            min_items:      the minimum number of items required to split a node
 
         Split-specific:
             steps_2means:   minimum number of steps for building the 2-means tree
@@ -61,26 +66,35 @@ class spatialtree(object):
 
         n = len(kwargs['indices'])
 
+        # Use maximum-variance kd by default
         if 'rule' not in kwargs:
-            kwargs['rule']          = 'pca'
+            kwargs['rule']          = 'kd'
             pass
 
         kwargs['rule'] = kwargs['rule'].lower()
 
-        if 'height' not in kwargs:
-            kwargs['height']        = max(0, numpy.ceil(numpy.log2(n) - 7))
-            pass
 
+        # By default, 25% of items propagate to both subtrees
         if 'spill' not in kwargs:
-            kwargs['spill']         = 0.0
+            kwargs['spill']         = 0.25
             pass
 
         if kwargs['spill'] < 0.0 or kwargs['spill'] >= 1.0:
             raise ValueError('spill=%.2e, must lie in range [0,1)' % kwargs['spill'])
 
+        if 'height' not in kwargs:
+            # This calculates the height necessary to achieve leaves of roughly 500 items,
+            # given the current spill threshold
+            kwargs['height']    =   max(0, int(numpy.ceil(numpy.log(n / 500) / numpy.log(2.0 / (1 + kwargs['spill'])))))
+            pass
+
+        if 'min_items' not in kwargs:
+            kwargs['min_items']     = 64
+            pass
+
         if kwargs['rule'] == '2-means' and 'steps_2means' not in kwargs:
             kwargs['steps_2means']  = 1000
-            pass
+            pass 
 
         if kwargs['rule'] == 'rp' and 'samples_rp' not in kwargs:
             kwargs['samples_rp']    = 10
@@ -88,6 +102,7 @@ class spatialtree(object):
         if 'maxindex' not in kwargs:
             kwargs['maxindex']      = len(data)
             pass
+
 
         # All information is now contained in kwargs, we may proceed
         
@@ -107,11 +122,11 @@ class spatialtree(object):
             break
 
         # Split the node
-        self.split(data, **kwargs)
+        self.__height       = self.__split(data, **kwargs)
 
         pass
 
-    def split(self, data, **kwargs):
+    def __split(self, data, **kwargs):
 
         # First, find the split rule
         if kwargs['rule'] == 'pca':
@@ -127,13 +142,13 @@ class spatialtree(object):
 
         # If the height is 0, we don't need to split
         if kwargs['height'] == 0:
-            return
+            return  0
 
         if kwargs['height'] < 1:
             raise ValueError('spatialtree.split() called with height<0')
 
-        if len(kwargs['indices']) < 2:
-            return
+        if len(kwargs['indices']) < kwargs['min_items']:
+            return  0
 
         # Compute the split direction 
         self.__w = splitF(data, **kwargs)
@@ -172,7 +187,33 @@ class spatialtree(object):
         del right_set
 
         # Done
-        pass
+        return 1 + max(self.__children[0].getHeight(), self.__children[1].getHeight())
+
+
+    # Getters and container methods
+    def getHeight(self):
+        return self.__height
+
+    def getRule(self):
+        return self.__rule
+
+    def getSpill(self):
+        return self.__spill
+
+    def getSplit(self):
+        return (self.__w, self.__thresholds)
+
+    def getDimension(self):
+        return self.__d
+
+    def __len__(self):
+        return len(self.__indices)
+
+    def __contains(self, x):
+        return x in self.__indices
+
+    def __iter__(self):
+        return self.__indices.__iter__()
 
     # RETRIEVAL CODE
 

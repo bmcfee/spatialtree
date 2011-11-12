@@ -294,7 +294,7 @@ class spatialtree(object):
         (l, v)      = numpy.linalg.eigh(sigma)
         
         # top eigenvector
-        w           = v[:, numpy.argmax(l)]
+        w           = v[numpy.argmax(l)]
         return w
 
     def __KD(self, data, **kwargs):

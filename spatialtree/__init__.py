@@ -270,7 +270,7 @@ class spatialtree(object):
         '''
         return len(self.__indices)
 
-    def __contains(self, item):
+    def __contains__(self, item):
         '''
         Returns true if the given item is contained in this tree, false otherwise.
         '''

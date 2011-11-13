@@ -202,7 +202,7 @@ class spatialtree(object):
 
         self.__indices.update(D.keys())
 
-        if self.__children is None:
+        if self.isLeaf():
             return
 
         left_set    = {}
@@ -264,6 +264,12 @@ class spatialtree(object):
         '''
         return self.__d
 
+    def isLeaf(self):
+        '''
+        Returns true if this tree is a leaf (no children)
+        '''
+        return self.__height == 0
+
     def __len__(self):
         '''
         Returns the number of data points contained in this tree.
@@ -282,6 +288,39 @@ class spatialtree(object):
         '''
         return self.__indices.__iter__()
 
+    def traverse(self):
+        '''
+        Iterator over nodes in the tree.  In-order traversal.
+        '''
+
+        if self.isLeaf():
+            yield self
+        else:
+            for t in self.__children[0].traverse():
+                yield t
+            yield self
+            for t in self.__children[1].traverse():
+                yield t
+            pass
+
+        pass
+
+    def remove(self, x):
+        '''
+        Remove an item from the tree
+        '''
+
+        if x not in self.__indices:
+            raise KeyError(x)
+
+        if not self.isLeaf():
+            for c in self.__children:
+                if x in c:
+                    c.remove(x)
+            
+        self.__indices.remove(x)
+        pass
+
     # RETRIEVAL CODE
 
     def retrievalSet(self, **kwargs):
@@ -298,7 +337,7 @@ class spatialtree(object):
             S = set()
         
             if idx in self.__indices:
-                if self.__children is None:
+                if self.isLeaf():
                     S = self.__indices.difference([idx])
                 else:
                     S = self.__children[0].retrievalSet(index=idx) | self.__children[1].retrievalSet(index=idx)
@@ -311,7 +350,7 @@ class spatialtree(object):
             S = set()
     
             # Did we land at a leaf?  Must be done
-            if self.__children is None:
+            if self.isLeaf():
                 S = self.__indices
             else:
                 Wx = numpy.dot(self.__w, vec)
@@ -363,6 +402,8 @@ class spatialtree(object):
 
         # Get the retrieval set
         if 'index' in kwargs:
+            if kwargs['index'] not in self:
+                raise KeyError(kwargs['index'])
             x = data[kwargs['index']]
         else:
             x = kwargs['vector']

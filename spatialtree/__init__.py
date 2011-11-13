@@ -340,7 +340,10 @@ class spatialtree(object):
                 if self.isLeaf():
                     S = self.__indices.difference([idx])
                 else:
-                    S = self.__children[0].retrievalSet(index=idx) | self.__children[1].retrievalSet(index=idx)
+                    for c in self.__children:
+                        if idx in c:
+                            S |= c.retrievalSet(index=idx)
+                    pass
                 pass
 
             return S
@@ -368,6 +371,8 @@ class spatialtree(object):
             return S
 
         if 'index' in kwargs:
+            if kwargs['index'] not in self:
+                raise KeyError(kwargs['index'])
             return __retrieveIndex(kwargs['index'])
         elif 'vector' in kwargs:
             return __retrieveVector(kwargs['vector'])
@@ -402,8 +407,6 @@ class spatialtree(object):
 
         # Get the retrieval set
         if 'index' in kwargs:
-            if kwargs['index'] not in self:
-                raise KeyError(kwargs['index'])
             x = data[kwargs['index']]
         else:
             x = kwargs['vector']
@@ -415,10 +418,8 @@ class spatialtree(object):
                 yield (numpy.sum((x-data[i])**2), i)
             pass
 
-        S = heapq.nsmallest(kwargs['k'], dg(self.retrievalSet(**kwargs)))
-
         # Pull out indices in sorted order
-        return [i for (d,i) in S]
+        return [i for (d,i) in heapq.nsmallest(kwargs['k'], dg(self.retrievalSet(**kwargs)))]
 
     # PRUNING
 

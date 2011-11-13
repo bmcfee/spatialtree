@@ -592,4 +592,138 @@ class spatialtree(object):
 
         return W[numpy.argmax(max_val - min_val)]
 
-# end
+# end spatialtree class
+
+class invertedmap(object):
+
+    def __init__(self, T):
+        '''
+        Construct an inverted map from a spatialtree object T.
+
+        I   = spatialtree.invertedmap(T)
+
+        This provides a more space-efficient data-structure for fast
+        retrieval of a static dataset.
+        '''
+        if not isinstance(T, spatialtree):
+            raise TypeError('Argument must be of type: spatialtree')
+
+        # Construct the index
+        self.__map      = {}
+        self.__leafsets = []
+        
+        # Leaf-generator helper function
+        def leafWalker():
+            for node in T.traverse():
+                if node.isLeaf():
+                    yield node
+            pass
+
+        for (i, node) in enumerate(leafWalker()):
+            # Construct a set for the i'th leaf
+            leafset = set()
+
+            for item in node:
+                # Add each item contained in the leaf to its set
+                leafset.add(item)
+
+                # Map the item to the new leaf-set
+                if item not in self.__map:
+                    self.__map[item] = set()
+                self.__map[item].add(i)
+                pass
+
+            # Add the new leafset to our list
+            self.__leafsets.append(leafset)
+            pass
+        pass
+
+    def __contains__(self, k):
+        '''
+        Test if item k is contained in the invertedmap
+        '''
+        return k in self.__map
+
+    def remove(self, k):
+        '''
+        Remove an item from the invertedmap
+        '''
+        if k not in self:
+            raise KeyError(k)
+
+        # Remove k from each of its leaf sets
+        for s in self.__map[k]:
+            self.__leafsets[s].remove(k)
+            pass
+
+        # Remove the mapping for k
+        del self.__map[k]
+        pass
+
+    def __len__(self):
+        '''
+        Return the number of items in this invertedmap
+        '''
+        return len(self.__map)
+
+    def numSets(self):
+        '''
+        Return the number of leaf sets in this invertedmap
+        '''
+        return len(self.__leafsets)
+
+    def __retrievalSet(self, k):
+        '''
+        S = invertedmap.__retrievalset(index)
+        
+        Get the retrieval set for the given item index.
+        '''
+
+        RS = set()
+
+        for s in self.__map[k]:
+            RS |= self.__leafsets[s]
+            pass
+
+        # Remove self from the retrieval set
+        RS.remove(k)
+
+        return RS
+
+    def k_nearest(self, data, **kwargs):
+        '''
+        neighbors = I.k_nearest(data, k=10, index=X)
+
+        data:       the data matrix/dictionary
+        k:          the number of (approximate) nearest neighbors to return
+
+        index=X:    the index of the query point
+
+        Returns:
+        A sorted list of the indices of k-nearest (approximate) neighbors of the query
+        '''
+        
+        if 'k' not in kwargs:
+            raise Exception('k_nearest called with no value of k')
+
+        if not isinstance(kwargs['k'], int):
+            raise TypeError('k_nearest must be called with an integer value of k')
+
+        if kwargs['k'] < 1:
+            raise ValueError('k must be a positive integer')
+
+        if 'index' in kwargs:
+            x = data[kwargs['index']]
+        else:
+            raise Exception('k_nearest called with no target index')
+
+        # Now compute distance from query point to the retrieval set
+        def dg(S):
+            for i in S:
+                yield (numpy.sum((x-data[i])**2), i)
+            pass
+
+        # Pull out indices in sorted order
+        return [i for (d,i) in heapq.nsmallest(kwargs['k'], dg(self.__retrievalSet(kwargs['index'])))]
+
+# end invertedmap

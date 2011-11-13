@@ -485,7 +485,7 @@ class spatialtree(object):
         (l, v)      = numpy.linalg.eigh(sigma)
         
         # top eigenvector
-        w           = v[numpy.argmax(l)]
+        w           = v[:,numpy.argmax(l)]
         return w
 
     def __KD(self, data, **kwargs):
@@ -544,7 +544,7 @@ class spatialtree(object):
                 # Find the closest centroid
                 j_min = numpy.argmin([D(data[i], mu) * c / (1.0 + c) for (mu, c) in zip(centers, counters)])
 
-                centers[j_min,:] = (centers[j_min,:] * counters[j_min] + data[i]) / (counters[j_min]+1)
+                centers[j_min] = (centers[j_min] * counters[j_min] + data[i]) / (counters[j_min]+1)
                 counters[j_min] += 1
 
                 count += 1
@@ -554,7 +554,7 @@ class spatialtree(object):
             if count > num_steps:
                 break
 
-        w = centers[0,:] - centers[1,:]
+        w = centers[0] - centers[1]
 
         w /= numpy.sqrt(numpy.sum(w**2))
         return w
@@ -576,7 +576,7 @@ class spatialtree(object):
 
         # normalize each sample to get a sample from unit sphere
         for i in xrange(k):
-            W[i,:] /= numpy.sqrt(numpy.sum(W[i,:]**2))
+            W[i] /= numpy.sqrt(numpy.sum(W[i]**2))
             pass
 
         # Find the direction that maximally spreads the data:
@@ -590,6 +590,6 @@ class spatialtree(object):
             max_val = numpy.maximum(max_val, Wx)
             pass
 
-        return W[numpy.argmax(max_val - min_val),:]
+        return W[numpy.argmax(max_val - min_val)]
 
 # end

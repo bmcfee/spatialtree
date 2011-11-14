@@ -1,2 +1,77 @@
-CREATED:2011-11-12 10:13:02 by Brian McFee <bmcfee@cs.ucsd.edu>
+spatialtree: Python module for spatial trees
+Author:     Brian McFee <bmcfee@cs.ucsd.edu>
+CREATED:    2011-11-13 16:12:29 
+
+This code is distributed under the GNU GPL license.  See LICENSE for details, 
+or http://www.gnu.org/licenses/gpl-3.0.txt .
+
+If you use this code for academic research, please cite the following 
+publication:
+
+[1] McFee, B. and Lanckriet, G.R.G.  Large-scale music similarity search 
+    with spatial trees.  12th International Society for Music Information 
+    Retrieval (ISMIR) conference, 2011.
+
+INTRODUCTION
+------------
+
+This module provides a unified interface to constructing various flavors of 
+spatial tree data structures for accelerating approximate nearest-neighbor
+retrieval in high-dimensional data.
+
+The supported methods for generating spatial trees include:
+    * KD-trees (maximum-variance) [2]
+    * PCA-trees [3]
+    * 2-means trees [3]
+    * Random projection trees [4]
+
+The methods listed above provide different rules for generating a recursive 
+partitioning of high-dimensional vector data.  The spatialtree package also
+provides support for spill trees, which use redundant mappings to improve
+the accuracy of nearest-neighbor retrieval [5].  The spill tree functionality 
+may be combined with any of the above rules.
+
+Spatialtree supports indexing of raw vector/matrix data (in the form of numpy 
+arrays), or structured key-value stores.  Spatialtree is semi-dynamic, in 
+that the tree may be pruned to a fixed height, and data may be removed (and 
+added, if using key-value stores), but the tree does not re-balance.
+
+For static data sets, we provide an efficient and light-weight inverted map 
+data structure for answering (approximate) nearest neighbor queries of items
+within the set.
+
+Several example programs are provided, demonstrating the various use-cases.
+Class and method documentation is provided in doc-strings (pydoc spatialtree).
+
+
+INSTALLATION
+------------
+
+From the command-line (as root/sudo):
+
+# python setup.py install
+
+
+REQUIREMENTS
+------------
+
+This module depends on numpy and scipy.
+
+REFERENCES
+----------
+
+[2] J.L. Bentley. Multidimensional binary search trees used for
+    associative searching. Commun. ACM, 18:509–517, Sep. 1975.
+
+[3] Nakul Verma, Samory Kpotufe, and Sanjoy Dasgupta. Which
+    spatial partition trees are adaptive to intrinsic dimension? In
+    Uncertainty in Artificial Intelligence, pages 565–574, 2009.
+
+[4] Sanjoy Dasgupta and Yoav Freund. Random projection trees
+    and low dimensional manifolds. In ACM Symposium on Theory
+    of Computing, pages 537–546, 2008.
+
+[5] Ting Liu, Andrew W. Moore, Alexander Gray, and Ke Yang.
+    An investigation of practical approximate nearest neighbor 
+    algorithms. In NIPS, pages 825–832. 2005.
 
